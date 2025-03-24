@@ -1,5 +1,5 @@
-2025-02-21T05:25:36.448Z
-error: column "from_date" of relation "proposals" does not exist
+2025-03-24T17:09:30.795Z
+Error: The server does not support SSL connections
     at C:\Users\mahaj\ju_shodh_api\node_modules\pg-pool\index.js:45:11
     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async scrapeProposals (C:\Users\mahaj\ju_shodh_api\scraper.js:179:9)
+    at async scrapeProposals (C:\Users\mahaj\ju_shodh_api\scraper.js:159:9)
