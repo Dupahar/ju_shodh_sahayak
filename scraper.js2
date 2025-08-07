@@ -1,0 +1,203 @@
+import FireCrawlApp from '@mendable/firecrawl-js';
+import { parse, isValid } from 'date-fns';
+
+// Initialize FireCrawl
+const app = new FireCrawlApp({
+  apiKey: "fc-22a6d53819e34fcd9fe2ff7ffa58be05"
+});
+
+// List of government research funding websites
+const researchUrls = [
+  'https://dst.gov.in/call-for-proposals',
+  'https://www.dbtindia.gov.in/latest-announcement',
+  'https://birac.nic.in/cfpview.php',
+  'https://www.icmr.gov.in/whatnew.html',
+  'https://serb.gov.in/page/show/63',
+  'https://www.icssr.org/funding',
+  'https://www.cefipra.org/ResearchProjects',
+  'https://www.igstc.org/',
+  'https://tdb.gov.in/',
+  'https://www.ugc.ac.in/',
+  'https://sparc.iitkgp.ac.in/',
+  'https://www.nasi.org.in/awards.htm',
+  'https://insaindia.res.in/'
+];
+
+// Enhanced date parsing function
+const parseDate = (dateString) => {
+  if (!dateString || typeof dateString !== 'string') {
+    return null;
+  }
+  
+  const cleanDate = dateString.trim().replace(/\s+/g, ' ');
+  
+  // Check for rolling/ongoing deadlines
+  if (cleanDate.match(/rolling|ongoing|continuous|open|throughout/i)) {
+    return 'Rolling Deadline';
+  }
+  
+  // Common date formats in Indian government websites
+  const dateFormats = [
+    'dd/MM/yyyy',
+    'dd-MM-yyyy',
+    'MM/dd/yyyy',
+    'yyyy-MM-dd',
+    'dd MMM yyyy',
+    'dd MMMM yyyy',
+    'MMM dd, yyyy',
+    'MMMM dd, yyyy'
+  ];
+  
+  for (const format of dateFormats) {
+    try {
+      const parsedDate = parse(cleanDate, format, new Date());
+      if (isValid(parsedDate)) {
+        return parsedDate.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  return cleanDate; // Return original if no format matches
+};
+
+// Extract proposals from markdown content
+const extractProposalsFromMarkdown = (markdown, sourceUrl) => {
+  const proposals = [];
+  
+  // Split by lines and look for table data
+  const lines = markdown.split('\n');
+  let inTable = false;
+  let headers = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Detect table header
+    if (line.includes('|') && line.includes('Title') && line.includes('Date')) {
+      headers = line.split('|').map(h => h.trim()).filter(h => h);
+      inTable = true;
+      continue;
+    }
+    
+    // Skip separator line
+    if (line.match(/^\|[\s\-\|]+\|$/)) {
+      continue;
+    }
+    
+    // Process table rows
+    if (inTable && line.includes('|')) {
+      const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
+      
+      if (cells.length >= 3) {
+        // Extract title and link
+        let title = cells[0];
+        let link = sourceUrl;
+        
+        // Check if title contains a link in markdown format
+        const linkMatch = title.match(/\[(.*?)\]\((.*?)\)/);
+        if (linkMatch) {
+          title = linkMatch[1];
+          link = linkMatch[2];
+          
+          // Convert relative URLs to absolute
+          if (link.startsWith('/')) {
+            const baseUrl = new URL(sourceUrl).origin;
+            link = baseUrl + link;
+          }
+        }
+        
+        const proposal = {
+          title: title,
+          agency: 'DST - Department of Science & Technology',
+          startDate: parseDate(cells[2]) || 'Not specified',
+          endDate: parseDate(cells[3]) || 'Not specified',
+          link: link,
+          sourceUrl: sourceUrl,
+          extractedAt: new Date().toISOString()
+        };
+        
+        proposals.push(proposal);
+      }
+    }
+    
+    // Stop processing if we've moved past the table
+    if (inTable && line && !line.includes('|')) {
+      inTable = false;
+    }
+  }
+  
+  return proposals;
+};
+
+// Main scraping function
+const scrapeResearchProposals = async () => {
+  const allProposals = [];
+  
+  for (const url of researchUrls) {
+    try {
+      const scrapeResult = await app.scrapeUrl(url, {
+        formats: ["markdown"],
+        onlyMainContent: true,
+        parsePDF: true,
+        maxAge: 14400000,
+        timeout: 60000,
+        waitFor: 5000
+      });
+      
+      if (!scrapeResult.success) {
+        continue;
+      }
+      
+      const markdown = scrapeResult.data?.markdown || scrapeResult.markdown;
+      
+      if (!markdown) {
+        continue;
+      }
+      
+      // Extract proposals from markdown
+      const proposals = extractProposalsFromMarkdown(markdown, url);
+      
+      if (proposals.length > 0) {
+        allProposals.push(...proposals);
+      }
+      
+      // Rate limiting - wait 2 seconds between requests
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  // Remove duplicates based on title and agency
+  const uniqueProposals = allProposals.filter((proposal, index, self) => 
+    index === self.findIndex(p => 
+      p.title === proposal.title && p.agency === proposal.agency
+    )
+  );
+  
+  // Sort by end date (active deadlines first)
+  uniqueProposals.sort((a, b) => {
+    const dateA = new Date(a.endDate);
+    const dateB = new Date(b.endDate);
+    
+    if (isNaN(dateA) && isNaN(dateB)) return 0;
+    if (isNaN(dateA)) return 1;
+    if (isNaN(dateB)) return -1;
+    
+    return dateA - dateB;
+  });
+  
+  return uniqueProposals;
+};
+
+// Run the scraper
+scrapeResearchProposals()
+  .then(proposals => {
+    console.log(JSON.stringify(proposals, null, 2));
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });

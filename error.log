@@ -1,5 +1,6 @@
-2025-03-24T17:09:30.795Z
-Error: The server does not support SSL connections
-    at C:\Users\mahaj\ju_shodh_api\node_modules\pg-pool\index.js:45:11
+2025-07-07T06:18:27.200Z
+Error: Failed to scrape URL. Status code: 400. Error: Bad Request - [{"code":"custom","message":"waitFor must not exceed half of timeout","path":["waitFor"]}]
+    at FirecrawlApp.handleError (C:\Users\mahaj\ju_shodh_api\node_modules\@mendable\firecrawl-js\dist\index.cjs:842:13)
+    at FirecrawlApp.scrapeUrl (C:\Users\mahaj\ju_shodh_api\node_modules\@mendable\firecrawl-js\dist\index.cjs:132:12)
     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async scrapeProposals (C:\Users\mahaj\ju_shodh_api\scraper.js:159:9)
+    at async scrapeProposals (C:\Users\mahaj\ju_shodh_api\scraper.js:53:20)
